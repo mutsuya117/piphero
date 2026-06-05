@@ -1,0 +1,21 @@
+﻿<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>PiP Slot Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app" aria-label="Picture-in-Picture slot machine demo">
+    <canvas id="game" width="240" height="320" aria-label="自動回転スロットマシン"></canvas>
+    <button id="pipbtn" type="button">PiPで表示</button>
+    <div id="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <video id="pipvideo" playsinline autopictureinpicture></video>
+
+  <script src="game.js" defer></script>
+  <script src="pip.js" defer></script>
+</body>
+</html>

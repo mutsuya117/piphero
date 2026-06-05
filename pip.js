@@ -29,6 +29,11 @@
       || video.webkitPresentationMode === 'picture-in-picture';
   }
 
+  function shouldUseWebKitPiP() {
+    return supportsWebKitPiP
+      && (!video.requestPictureInPicture || /iPad|iPhone|iPod/.test(navigator.userAgent));
+  }
+
   if (!supportsCapture || !supportsPiP) {
     btn.disabled = true;
     setStatus('お使いのブラウザは Picture-in-Picture に非対応です（iOS Safari は 16 以降が必要）', true);
@@ -40,17 +45,26 @@
   btn.addEventListener('click', async () => {
     try {
       ensureStream();
-      await video.play();
 
       if (isInPiP()) {
         setStatus('PiP表示中です');
         return;
       }
 
-      if (video.requestPictureInPicture) {
-        await video.requestPictureInPicture();
+      const playPromise = video.play();
+      let pipPromise = null;
+
+      if (shouldUseWebKitPiP()) {
+        video.webkitSetPresentationMode('picture-in-picture');
+      } else if (video.requestPictureInPicture) {
+        pipPromise = video.requestPictureInPicture();
       } else if (supportsWebKitPiP) {
         video.webkitSetPresentationMode('picture-in-picture');
+      }
+
+      await playPromise;
+      if (pipPromise) {
+        await pipPromise;
       }
 
       setStatus('PiP表示中です');

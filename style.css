@@ -13,6 +13,8 @@ body {
 
 body {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -24,16 +26,24 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 10px;
   width: 100%;
-  padding: 16px;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  padding: calc(10px + env(safe-area-inset-top)) 12px calc(10px + env(safe-area-inset-bottom));
+  overflow: hidden;
 }
 
 #game {
-  width: 480px;
-  height: 640px;
-  max-width: min(480px, calc(100vw - 32px));
-  max-height: calc(100vh - 104px);
+  width: auto;
+  height: min(540px, calc(100vh - 128px));
+  height: min(540px, calc(100svh - 128px));
+  height: min(540px, calc(100dvh - 128px));
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 128px);
+  max-height: calc(100svh - 128px);
+  max-height: calc(100dvh - 128px);
   aspect-ratio: 3 / 4;
   background: #000;
   border: 2px solid #36436b;
@@ -76,10 +86,32 @@ body {
 }
 
 #status {
-  min-height: 22px;
-  max-width: min(480px, calc(100vw - 32px));
+  order: -1;
+  min-height: 34px;
+  max-width: min(420px, calc(100vw - 24px));
   color: #ff6b6b;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.45;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 520px) {
+  .app {
+    justify-content: flex-start;
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  #game {
+    height: min(420px, calc(100vh - 126px));
+    height: min(420px, calc(100svh - 126px));
+    height: min(420px, calc(100dvh - 126px));
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 126px);
+    max-height: calc(100svh - 126px);
+    max-height: calc(100dvh - 126px);
+  }
 }

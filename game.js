@@ -12,12 +12,18 @@
   const REEL_GAP = 8;
   const REEL_X = [16, 16 + SYMBOL_DRAW_SIZE + REEL_GAP, 16 + (SYMBOL_DRAW_SIZE + REEL_GAP) * 2];
   const CENTER_ROW = 1;
-  const CENTER_Y = REEL_TOP + SYMBOL_DRAW_SIZE * CENTER_ROW;
   const SPIN_TIME = 820;
   const STOP_DELAY = 170;
   const WIN_RESULT_TIME = 1800;
   const MISS_RESULT_TIME = 520;
   const PAUSE_TIME = 80;
+  const PAYLINES = [
+    { name: 'TOP', rows: [0, 0, 0] },
+    { name: 'MIDDLE', rows: [1, 1, 1] },
+    { name: 'BOTTOM', rows: [2, 2, 2] },
+    { name: 'DIAGONAL_DOWN', rows: [0, 1, 2] },
+    { name: 'DIAGONAL_UP', rows: [2, 1, 0] },
+  ];
 
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d', { alpha: false });
@@ -163,6 +169,7 @@
   let phaseTimer = 0;
   let lastTime = performance.now();
   let targetWinSymbol = null;
+  let targetWinRows = null;
   let lastResult = null;
   let tapPulse = 0;
   let winBurstSeed = 0;
@@ -171,13 +178,21 @@
     return ((value % length) + length) % length;
   }
 
-  function centerSymbolIndex(reel) {
+  function symbolIndexAtRow(reel, row) {
     const base = Math.floor(reel.offsetY / SYMBOL_DRAW_SIZE);
-    return reel.strip[wrapIndex(base + CENTER_ROW, reel.strip.length)];
+    return reel.strip[wrapIndex(base + row, reel.strip.length)];
+  }
+
+  function centerSymbolIndex(reel) {
+    return symbolIndexAtRow(reel, CENTER_ROW);
   }
 
   function centerSymbolName(reel) {
     return SYMBOL_NAMES[centerSymbolIndex(reel)];
+  }
+
+  function symbolNameAtRow(reel, row) {
+    return SYMBOL_NAMES[symbolIndexAtRow(reel, row)];
   }
 
   function chooseTargetOffset(reel, reelIndex) {
@@ -185,11 +200,12 @@
     const minTravel = 3 + reelIndex * 2 + Math.floor(Math.random() * 2);
     const maxTravel = minTravel + reel.strip.length;
 
-    if (targetWinSymbol !== null) {
+    if (targetWinSymbol !== null && targetWinRows) {
+      const targetRow = targetWinRows[reelIndex];
       for (let travel = minTravel; travel <= maxTravel; travel += 1) {
         const topIndex = wrapIndex(currentTop + travel, reel.strip.length);
-        const center = reel.strip[wrapIndex(topIndex + CENTER_ROW, reel.strip.length)];
-        if (center === targetWinSymbol) {
+        const target = reel.strip[wrapIndex(topIndex + targetRow, reel.strip.length)];
+        if (target === targetWinSymbol) {
           reel.finalIndex = topIndex;
           return (currentTop + travel) * SYMBOL_DRAW_SIZE;
         }
@@ -205,7 +221,13 @@
     phase = 'stopping';
     phaseTimer = 0;
     lastResult = null;
-    targetWinSymbol = Math.random() < 0.24 ? Math.floor(Math.random() * SYMBOLS.length) : null;
+    if (Math.random() < 0.24) {
+      targetWinSymbol = Math.floor(Math.random() * SYMBOLS.length);
+      targetWinRows = PAYLINES[Math.floor(Math.random() * PAYLINES.length)].rows;
+    } else {
+      targetWinSymbol = null;
+      targetWinRows = null;
+    }
   }
 
   function beginSpin() {
@@ -213,6 +235,7 @@
     phaseTimer = 0;
     lastResult = null;
     targetWinSymbol = null;
+    targetWinRows = null;
     reels.forEach((reel, index) => {
       reel.speed = 8 + index * 0.45;
       reel.stopping = false;
@@ -228,9 +251,13 @@
   }
 
   function evaluateResult() {
-    const names = reels.map(centerSymbolName);
-    const winner = names.every((name) => name === names[0]);
-    const payout = winner ? PAYOUT[names[0]] : 0;
+    const wins = PAYLINES.map((line) => {
+      const names = line.rows.map((row, reelIndex) => symbolNameAtRow(reels[reelIndex], row));
+      const winner = names.every((name) => name === names[0]);
+      return winner ? { line, name: names[0], payout: PAYOUT[names[0]] } : null;
+    }).filter(Boolean);
+    const payout = wins.reduce((sum, win) => sum + win.payout, 0);
+    const winner = wins.length > 0;
 
     if (payout > 0) {
       coins += payout;
@@ -238,10 +265,10 @@
     }
 
     lastResult = {
-      names,
+      wins,
       winner,
       payout,
-      text: winner ? `WIN +${payout}` : 'NO WIN',
+      text: winner ? `WIN x${wins.length} +${payout}` : 'NO WIN',
     };
     phase = 'result';
     phaseTimer = 0;
@@ -362,6 +389,59 @@
     ctx.fillText(text, x, y);
   }
 
+  function paylinePoint(reelIndex, row) {
+    return {
+      x: REEL_X[reelIndex] + SYMBOL_DRAW_SIZE / 2,
+      y: REEL_TOP + row * SYMBOL_DRAW_SIZE + SYMBOL_DRAW_SIZE / 2,
+    };
+  }
+
+  function drawPayline(rows, color, width, alpha) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+
+    rows.forEach((row, reelIndex) => {
+      const point = paylinePoint(reelIndex, row);
+      if (reelIndex === 0) {
+        ctx.moveTo(point.x, point.y);
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    });
+
+    ctx.stroke();
+
+    rows.forEach((row, reelIndex) => {
+      const point = paylinePoint(reelIndex, row);
+      fillRect(point.x - 3, point.y - 3, 6, 6, color);
+    });
+
+    ctx.restore();
+  }
+
+  function drawPaylineGuide() {
+    PAYLINES.forEach((line) => {
+      drawPayline(line.rows, '#39f', 1, 0.22);
+    });
+  }
+
+  function drawWinningPaylines() {
+    if (!lastResult?.winner || (phase !== 'result' && phase !== 'pause')) {
+      return;
+    }
+
+    lastResult.wins.forEach((win) => {
+      drawPayline(win.line.rows, '#000', 7, 0.75);
+      drawPayline(win.line.rows, '#ff3', 5, 1);
+      drawPayline(win.line.rows, '#fff', 2, 1);
+    });
+  }
+
   function drawWinCelebration() {
     if (!lastResult?.winner || (phase !== 'result' && phase !== 'pause')) {
       return;
@@ -427,10 +507,7 @@
       }
     });
 
-    const highlight = lastResult?.winner && (phase === 'result' || phase === 'pause');
-    ctx.strokeStyle = highlight ? '#ff3' : '#39f';
-    ctx.lineWidth = highlight ? 4 : 2;
-    ctx.strokeRect(14, CENTER_Y - 2, CANVAS_W - 28, SYMBOL_DRAW_SIZE + 4);
+    drawPaylineGuide();
 
     if (tapPulse > 0) {
       ctx.strokeStyle = '#fff';
@@ -444,6 +521,7 @@
     const statusColor = lastResult?.winner && (phase === 'result' || phase === 'pause') ? '#ff3' : '#fff';
     drawText(statusText, CANVAS_W / 2, 282, statusColor, 'center');
     drawWinCelebration();
+    drawWinningPaylines();
   }
 
   function frame(now) {

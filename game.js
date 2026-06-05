@@ -20,6 +20,7 @@
   const SPEED_MIN = 0.5;
   const SPEED_MAX = 3;
   const SPEED_STEP = 0.25;
+  const SPEED_PRESETS = [1, 1.5, 2, 3, 0.5];
   const PAYLINES = [
     { name: 'TOP', rows: [0, 0, 0] },
     { name: 'MIDDLE', rows: [1, 1, 1] },
@@ -217,6 +218,12 @@
 
   function changeSpeed(delta) {
     setSpeedMultiplier(speedMultiplier + delta);
+  }
+
+  function cycleSpeedPreset() {
+    const currentIndex = SPEED_PRESETS.findIndex((speed) => Math.abs(speed - speedMultiplier) < 0.001);
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % SPEED_PRESETS.length : 0;
+    setSpeedMultiplier(SPEED_PRESETS[nextIndex]);
   }
 
   function startGame() {
@@ -614,6 +621,7 @@
     start: startGame,
     speedUp: () => changeSpeed(SPEED_STEP),
     speedDown: () => changeSpeed(-SPEED_STEP),
+    cycleSpeed: cycleSpeedPreset,
     getSpeed: () => speedMultiplier,
     hasStarted: () => hasStarted,
   };

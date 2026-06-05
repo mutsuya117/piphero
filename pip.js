@@ -13,6 +13,7 @@
       || video.webkitSupportsPresentationMode('picture-in-picture'));
   const supportsPiP = supportsStandardPiP || supportsWebKitPiP;
   let streamPrimed = false;
+  let lastPauseControlAt = 0;
 
   function setStatus(message, isError = false) {
     status.textContent = message;
@@ -59,6 +60,9 @@
     const playPromise = video.play();
     streamPrimed = true;
     btn.disabled = false;
+    if (navigator.mediaSession) {
+      navigator.mediaSession.playbackState = 'playing';
+    }
     refreshReadyStatus();
 
     playPromise.catch((error) => {
@@ -75,6 +79,34 @@
       window.pipheroGame?.speedDown?.();
     }
     refreshReadyStatus();
+  }
+
+  function cycleSpeedFromPauseControl() {
+    const now = performance.now();
+    if (now - lastPauseControlAt < 450) {
+      keepVideoPlaying();
+      return;
+    }
+
+    lastPauseControlAt = now;
+    window.pipheroGame?.cycleSpeed?.();
+    keepVideoPlaying();
+    refreshReadyStatus();
+  }
+
+  function keepVideoPlaying() {
+    if (!video.srcObject) {
+      return;
+    }
+
+    const playPromise = video.play();
+    if (navigator.mediaSession) {
+      navigator.mediaSession.playbackState = 'playing';
+    }
+
+    playPromise.catch((error) => {
+      console.debug('resume PiP video failed:', error.message);
+    });
   }
 
   function installMediaSessionControls() {
@@ -94,6 +126,8 @@
       seekforward: () => changeSpeedFromMedia(1),
       previoustrack: () => changeSpeedFromMedia(-1),
       nexttrack: () => changeSpeedFromMedia(1),
+      pause: () => cycleSpeedFromPauseControl(),
+      play: () => keepVideoPlaying(),
     };
 
     Object.entries(actions).forEach(([action, handler]) => {
@@ -153,6 +187,9 @@
       }
 
       streamPrimed = true;
+      if (navigator.mediaSession) {
+        navigator.mediaSession.playbackState = 'playing';
+      }
       refreshReadyStatus();
     } catch (error) {
       setStatus(`PiP起動に失敗しました: ${error.message}`, true);
@@ -169,6 +206,16 @@
 
   video.addEventListener('webkitpresentationmodechanged', () => {
     refreshReadyStatus();
+  });
+
+  video.addEventListener('pause', () => {
+    cycleSpeedFromPauseControl();
+  });
+
+  video.addEventListener('play', () => {
+    if (navigator.mediaSession) {
+      navigator.mediaSession.playbackState = 'playing';
+    }
   });
 
   document.addEventListener('visibilitychange', async () => {

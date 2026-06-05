@@ -17,6 +17,9 @@
   const WIN_RESULT_TIME = 1800;
   const MISS_RESULT_TIME = 520;
   const PAUSE_TIME = 80;
+  const SPEED_MIN = 0.5;
+  const SPEED_MAX = 3;
+  const SPEED_STEP = 0.25;
   const PAYLINES = [
     { name: 'TOP', rows: [0, 0, 0] },
     { name: 'MIDDLE', rows: [1, 1, 1] },
@@ -165,7 +168,7 @@
   }));
 
   let coins = 0;
-  let phase = 'spinning';
+  let phase = 'ready';
   let phaseTimer = 0;
   let lastTime = performance.now();
   let targetWinSymbol = null;
@@ -173,6 +176,8 @@
   let lastResult = null;
   let tapPulse = 0;
   let winBurstSeed = 0;
+  let hasStarted = false;
+  let speedMultiplier = 1;
 
   function wrapIndex(value, length) {
     return ((value % length) + length) % length;
@@ -193,6 +198,36 @@
 
   function symbolNameAtRow(reel, row) {
     return SYMBOL_NAMES[symbolIndexAtRow(reel, row)];
+  }
+
+  function emitSpeedChange() {
+    window.dispatchEvent(new CustomEvent('piphero:speedchange', {
+      detail: { speedMultiplier },
+    }));
+  }
+
+  function setSpeedMultiplier(value) {
+    const stepped = Math.round(value / SPEED_STEP) * SPEED_STEP;
+    const next = Math.max(SPEED_MIN, Math.min(SPEED_MAX, stepped));
+    if (next !== speedMultiplier) {
+      speedMultiplier = next;
+      emitSpeedChange();
+    }
+  }
+
+  function changeSpeed(delta) {
+    setSpeedMultiplier(speedMultiplier + delta);
+  }
+
+  function startGame() {
+    if (hasStarted) {
+      return false;
+    }
+
+    hasStarted = true;
+    beginSpin();
+    window.dispatchEvent(new CustomEvent('piphero:firsttap'));
+    return true;
   }
 
   function chooseTargetOffset(reel, reelIndex) {
@@ -300,9 +335,15 @@
   }
 
   function update(dt) {
-    const dtScale = dt / (1000 / 60);
+    if (phase === 'ready') {
+      return;
+    }
+
+    const timeScale = phase === 'result' && lastResult?.winner ? 1 : speedMultiplier;
+    const scaledDt = dt * timeScale;
+    const dtScale = scaledDt / (1000 / 60);
     tapPulse = Math.max(0, tapPulse - dt * 0.005);
-    phaseTimer += dt;
+    phaseTimer += scaledDt;
 
     if (phase === 'spinning') {
       reels.forEach((reel) => updateReel(reel, dtScale));
@@ -493,6 +534,7 @@
 
     drawText('PIP SLOT', 16, 18, '#39f');
     drawText(`COINS: ${coins}`, CANVAS_W - 16, 18, '#ff3', 'right');
+    drawText(`SPD x${speedMultiplier.toFixed(2)}`, 16, 42, '#8fd18f');
 
     fillRect(12, REEL_TOP - 8, CANVAS_W - 24, SYMBOL_DRAW_SIZE * REEL_VISIBLE_ROWS + 16, '#070a12');
 
@@ -517,9 +559,28 @@
       ctx.globalAlpha = 1;
     }
 
-    const statusText = lastResult && (phase === 'result' || phase === 'pause') ? lastResult.text : phase.toUpperCase();
+    const statusText = phase === 'ready'
+      ? 'TAP TO START'
+      : lastResult && (phase === 'result' || phase === 'pause') ? lastResult.text : phase.toUpperCase();
     const statusColor = lastResult?.winner && (phase === 'result' || phase === 'pause') ? '#ff3' : '#fff';
     drawText(statusText, CANVAS_W / 2, 282, statusColor, 'center');
+
+    if (phase === 'ready') {
+      ctx.save();
+      ctx.globalAlpha = 0.68;
+      fillRect(24, 128, CANVAS_W - 48, 64, '#000');
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#ff3';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(24, 128, CANVAS_W - 48, 64);
+      ctx.font = '20px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ff3';
+      ctx.fillText('TAP TO START', CANVAS_W / 2, 160);
+      ctx.restore();
+    }
+
     drawWinCelebration();
     drawWinningPaylines();
   }
@@ -535,7 +596,17 @@
   canvas.addEventListener('pointerdown', (event) => {
     event.preventDefault();
     tapPulse = 1;
+    startGame();
   });
+
+  window.pipheroGame = {
+    start: startGame,
+    speedUp: () => changeSpeed(SPEED_STEP),
+    speedDown: () => changeSpeed(-SPEED_STEP),
+    getSpeed: () => speedMultiplier,
+    hasStarted: () => hasStarted,
+  };
+  emitSpeedChange();
 
   draw();
   requestAnimationFrame(frame);

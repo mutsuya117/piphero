@@ -149,7 +149,7 @@
 
   const SYMBOLS = [SYM_7, SYM_BAR, SYM_BELL, SYM_CHERRY, SYM_WATERMELON];
   const SYMBOL_NAMES = ['7', 'BAR', 'BELL', 'CHERRY', 'WATERMELON'];
-  const PAYOUT = { 7: 100, BAR: 50, BELL: 20, CHERRY: 10, WATERMELON: 10 };
+  const PAYOUT = { '7': 100, BAR: 50, BELL: 20, CHERRY: 10, WATERMELON: 10 };
 
   const strips = [
     [0, 2, 4, 1, 3, 2, 0, 4, 3, 1, 2, 4, 0, 3, 1],
@@ -289,7 +289,8 @@
     const wins = PAYLINES.map((line) => {
       const names = line.rows.map((row, reelIndex) => symbolNameAtRow(reels[reelIndex], row));
       const winner = names.every((name) => name === names[0]);
-      return winner ? { line, name: names[0], payout: PAYOUT[names[0]] } : null;
+      const linePayout = PAYOUT[names[0]] ?? 0;
+      return winner && linePayout > 0 ? { line, name: names[0], payout: linePayout } : null;
     }).filter(Boolean);
     const payout = wins.reduce((sum, win) => sum + win.payout, 0);
     const winner = wins.length > 0;
@@ -525,16 +526,25 @@
     ctx.restore();
   }
 
+  function isShowingResult() {
+    return Boolean(lastResult && (phase === 'result' || phase === 'pause'));
+  }
+
+  function drawHud() {
+    const coinText = isShowingResult() && lastResult.winner
+      ? `COINS: ${coins} +${lastResult.payout}`
+      : `COINS: ${coins}`;
+
+    drawText(`SPD x${speedMultiplier.toFixed(2)}`, 16, 18, '#8fd18f');
+    drawText(coinText, CANVAS_W - 16, 18, '#ff3', 'right');
+  }
+
   function draw() {
     fillRect(0, 0, CANVAS_W, CANVAS_H, '#05070d');
     fillRect(8, 8, CANVAS_W - 16, CANVAS_H - 16, '#0b1020');
     ctx.strokeStyle = '#36436b';
     ctx.lineWidth = 2;
     ctx.strokeRect(9, 9, CANVAS_W - 18, CANVAS_H - 18);
-
-    drawText('PIP SLOT', 16, 18, '#39f');
-    drawText(`COINS: ${coins}`, CANVAS_W - 16, 18, '#ff3', 'right');
-    drawText(`SPD x${speedMultiplier.toFixed(2)}`, 16, 42, '#8fd18f');
 
     fillRect(12, REEL_TOP - 8, CANVAS_W - 24, SYMBOL_DRAW_SIZE * REEL_VISIBLE_ROWS + 16, '#070a12');
 
@@ -559,10 +569,14 @@
       ctx.globalAlpha = 1;
     }
 
+    drawWinCelebration();
+    drawHud();
+    drawWinningPaylines();
+
     const statusText = phase === 'ready'
       ? 'TAP TO START'
-      : lastResult && (phase === 'result' || phase === 'pause') ? lastResult.text : phase.toUpperCase();
-    const statusColor = lastResult?.winner && (phase === 'result' || phase === 'pause') ? '#ff3' : '#fff';
+      : isShowingResult() ? lastResult.text : phase.toUpperCase();
+    const statusColor = lastResult?.winner && isShowingResult() ? '#ff3' : '#fff';
     drawText(statusText, CANVAS_W / 2, 282, statusColor, 'center');
 
     if (phase === 'ready') {
@@ -580,9 +594,6 @@
       ctx.fillText('TAP TO START', CANVAS_W / 2, 160);
       ctx.restore();
     }
-
-    drawWinCelebration();
-    drawWinningPaylines();
   }
 
   function frame(now) {
